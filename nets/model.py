@@ -5,12 +5,12 @@ from utils import utils
 
 
 
-def define_G(input_nc, output_nc, ngf, gpu_id, norm='batch', init_type='normal'):
+def define_G(input_nc=3, output_nc=3, ngf=64, gpu_id=0, norm='batch', init_type='normal'):
     norm_layer = utils.get_norm_layer(norm_type=norm)
-    net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, n_blocks=9).to(gpu_id)
-    utils.init_weights(net, init_type, gain=0.02)
+    netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, n_blocks=9).to(gpu_id)
+    utils.init_weights(netG, init_type, gain=0.02)
    
-    return net
+    return netG
 
 
 # Defines the generator that consists of Resnet blocks between a few
@@ -162,21 +162,23 @@ class Outconv(nn.Module):
         return x
 
 
-def define_D(input_nc, ndf, netD,
-             n_layers_D=3, norm='batch', use_sigmoid=False, init_type='normal', init_gain=0.02, gpu_id='cuda:0'):
+def define_D(input_nc=6, ndf=64, netD_type='basic',
+             n_layers_D=3, norm='batch', use_sigmoid=False, init_type='normal', init_gain=0.02, gpu_id=0):
     net = None
     norm_layer = utils.get_norm_layer(norm_type=norm)
 
-    if netD == 'basic':
-        net = NLayerDiscriminator(input_nc, ndf, n_layers=3, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
-    elif netD == 'n_layers':
-        net = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
-    elif netD == 'pixel':
-        net = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
+    if netD_type == 'basic':
+        netD = NLayerDiscriminator(input_nc, ndf, n_layers=3, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
+    elif netD_type == 'n_layers':
+        netD = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
+    elif netD_type == 'pixel':
+        netD = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer, use_sigmoid=use_sigmoid)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % net)
 
-    return init_net(net, init_type, init_gain, gpu_id)
+    netD.to(gpu_id)
+    utils.init_weights(netD, init_type, gain=0.02)
+    return netD
 
 
 # Defines the PatchGAN discriminator with the specified arguments.

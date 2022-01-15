@@ -1,14 +1,9 @@
-import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-from os import listdir
-from os.path import join
-import random
 from PIL import Image
-
 import glob
-from utils.utils import is_image_file, load_img
+from utils.utils import is_image_file
 
 class DatasetFromFolder(data.Dataset):
     def __init__(self, image_dir, direction):
