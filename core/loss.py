@@ -4,38 +4,23 @@ import torch.nn as nn
 from utils import utils
 import time
 
-class GANLoss(nn.Module):
-    def __init__(self, use_lsgan=True, target_real_label=1.0, target_fake_label=0.0):
-        super(GANLoss, self).__init__()
-        self.real_label = torch.tensor(target_real_label).cuda()
-        self.fake_label = torch.tensor(target_fake_label).cuda()
-
-        if use_lsgan:
-            self.loss = nn.MSELoss()
-        else:
-            self.loss = nn.BCELoss()
-
-    def get_target_tensor(self, input, target_is_real):
-        if target_is_real:
-            target_tensor = self.real_label
-        else:
-            target_tensor = self.fake_label
-
-        return target_tensor.expand_as(input)
-
-    def __call__(self, input, target_is_real):
-        target_tensor = self.get_target_tensor(input, target_is_real)
-
-        return self.loss(input, target_tensor)
-    
 class lossCollector():
     def __init__(self,args):
         self.args = args
+        self.start_time = time.time()
+
+        # define losses
         self.L1 = nn.L1Loss()
         self.L2 = nn.MSELoss()
-        self.GANL = GANLoss()
+
+        # define adversarial loss
+        if args.adv_loss_type == 'lsgan':
+            self.adv = nn.MSELoss()
+        elif args.adv_loss_type == 'vanilla':
+            self.adv = nn.BCELoss()
+
+        # dictionary for loss
         self.loss_dict = {}
-        self.start_time = time.time()
 
     def get_L1_loss(self,a,b):
         return self.L1(a, b)
@@ -43,12 +28,16 @@ class lossCollector():
     def get_L2_loss(self,a,b):
         return self.L2(a, b)
 
-    def get_GAN_loss(self, a, target_is_real):
-        return self.GANL(a, target_is_real)
+    def get_adv_loss(self, logit, label):
+        if label:
+            label_ = torch.ones_like(logit, device='cuda')
+        else:
+            label_ = torch.zeros_like(logit, device='cuda')
+        return self.adv(logit, label_)
 
-    def get_D_loss(self,pred_fake,pred_real):
-        loss_d_fake = self.get_GAN_loss(pred_fake,False)
-        loss_d_real = self.get_GAN_loss(pred_real,True)
+    def get_D_loss(self, pred_fake, pred_real):
+        loss_d_fake = self.get_adv_loss(pred_fake, False)
+        loss_d_real = self.get_adv_loss(pred_real, True)
         loss_d = (loss_d_fake + loss_d_real) * 0.5
 
         self.loss_dict['L_D'] = round(loss_d.item(),4)
@@ -57,15 +46,30 @@ class lossCollector():
         return loss_d
 
     def get_G_loss(self, pred_fake, fake_b, real_b):
-        loss_g_gan = self.get_GAN_loss(pred_fake,True)
-        loss_g_l1 = self.get_L1_loss(fake_b,real_b) * self.args.lamb
-        loss_g = loss_g_gan + loss_g_l1
 
-        self.loss_dict['L_gan'] = round(loss_g_gan.item(),4)
-        self.loss_dict['L_l1'] = round(loss_g_l1.item(),4)
-        self.loss_dict['L_G'] = round(loss_g.item(),4)
+        L_G = 0.0
+
+        # adv_loss
+        if self.args.W_adv:
+            L_gan = self.get_adv_loss(pred_fake, True)
+            L_G += self.args.W_adv * L_gan
+            self.loss_dict['L_gan'] = round(L_gan.item(),4)
         
-        return loss_g
+        # L1_loss
+        if self.args.W_L1:
+            L_L1 = self.get_L1_loss(fake_b, real_b)
+            L_G += self.args.W_L1 * L_L1
+            self.loss_dict['L_L1'] = round(L_L1.item(),4)
+            
+        # L2_loss
+        if self.args.W_L2:
+            L_L2 = self.get_L2_loss(fake_b, real_b)
+            L_G += self.args.W_L2 * L_L2
+            self.loss_dict['L_l2'] = round(L_L2.item(),4)
+
+        self.loss_dict['L_G'] = round(L_G.item(),4)
+        
+        return L_G
 
     def print_loss(self, global_step):
 
