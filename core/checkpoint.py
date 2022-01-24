@@ -33,10 +33,10 @@ class ckptIO():
         os.makedirs(f'{self.args.save_root}/{self.args.run_id}/ckpt', exist_ok=True)
 
         ckpt_dict = {
-            "G": G,
-            "D": D,
-            "opt_G": opt_G,
-            "opt_D": opt_D,
+            "G": G.state_dict(),
+            "D": D.state_dict(),
+            "opt_G": opt_G.state_dict(),
+            "opt_D": opt_D.state_dict(),
         }
 
         ckpt_path = f'{self.args.save_root}/{self.args.run_id}/ckpt/{global_step}.pt'
